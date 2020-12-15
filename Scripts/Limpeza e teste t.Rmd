@@ -1,0 +1,816 @@
+---
+title: "Iniciação Científica Insper"
+author: "Augusto Netto"
+date: "22/09/2020"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+    number_section: yes
+    theme: readable
+    highlight: haddock
+
+---
+
+Primeiro, vamos carregar as bibliotecas necessárias e definir o wd:
+
+
+
+```{r}
+
+library(tidyverse)
+#library(ggplot2)
+```
+
+
+Agora, puxamos a base extraída do Economática e fazemos as organizações necessárias:
+
+```{r Dataset, results= 'hide'}
+
+setwd("C:/Users/gutao/OneDrive - Insper - Institudo de Ensino e Pesquisa/Documents/Insper/IC/Data/Dataset")
+base1 <- readxl::read_xlsx("base3.xlsx")
+
+base_crua <- base1 %>%
+  filter(!is.na(...1)) %>% 
+  rename(id = ...1, nome = ...2, classe = ...3, bolsa = ...4, tipo = ...5, status = ...6, 
+         ticker = ...7, retorno_total = ...8, ret_1 = ...9, ret_2 = ...10, ret_3 = ...11, 
+         ret_4 = ...12, ret_5 = ...13, ret_6 = ...14, ret_7 = ...15, ret_8 = ...16, 
+         mkt_cap = ...17, ROE = ...18, ROA = ...19, 
+         ROIC = ...20, lucro_bruto = ...21, LPA_growth = ...22, alav_BS = ...23,
+         EBIT_DivLiq = ...24, ativo_growth = ...25, provlp = ...26, provcp = ...27,
+         setor_econ = ...28, desvpad_ret = ...29, sharpe_economatica = ...30, div_yld = ...31,
+         LPA_1 = ...32, LPA_2 = ...33, LPA_3 = ...34, LPA_4 = ...35, LPA_5 = ...36, LPA_6 = ...37, 
+         LPA_se = ...38,  sharpe_calc = Economatica) %>%
+  mutate(retorno_total = as.numeric(retorno_total), ret_1 = as.numeric(ret_1), ret_2 = as.numeric(ret_2),
+         ret_3 = as.numeric(ret_3), ret_4 = as.numeric(ret_4), ret_5 = as.numeric(ret_5), 
+         ret_6 = as.numeric(ret_6), ret_7 = as.numeric(ret_7), ret_8 = as.numeric(ret_8),
+         mkt_cap = as.numeric(mkt_cap), ROE = as.numeric(ROE), ROA = as.numeric(ROA), 
+         ROIC = as.numeric(ROIC), lucro_bruto = as.numeric(lucro_bruto), LPA_growth = as.numeric(LPA_growth),
+         alav_BS = as.numeric(alav_BS), EBIT_DivLiq = as.numeric(EBIT_DivLiq),
+         ativo_growth = as.numeric(ativo_growth), provlp = as.numeric(provlp),
+         provcp = as.numeric(provcp), desvpad_ret = as.numeric(desvpad_ret), LPA_1 = as.numeric(LPA_1),
+         LPA_2 = as.numeric(LPA_2), LPA_3 = as.numeric(LPA_3), LPA_4 = as.numeric(LPA_4),
+         LPA_5 = as.numeric(LPA_5), LPA_6 = as.numeric(LPA_6), LPA_se = as.numeric(LPA_se),
+         sharpe_calc = as.numeric(sharpe_calc),
+         sharpe_economatica = as.numeric(sharpe_economatica), div_yld = as.numeric(div_yld),
+         desvpad_ret = as.numeric(desvpad_ret)) %>%
+  mutate(provisoes = provlp + provcp) %>%
+  select(-c(tipo, status, bolsa, provcp, provlp, setor_econ, ret_1, ret_2, ret_3, ret_4, ret_5,
+            ret_6, ret_7, ret_8, LPA_1, LPA_2, LPA_3, LPA_4, LPA_5, LPA_6)) %>% 
+  filter(!is.na(mkt_cap)) %>% 
+  mutate(size = ifelse(mkt_cap >= median(mkt_cap), "large", "small"))
+
+```
+
+
+Seguindo o procedimento de Hsu (2015), vamos dividir a amostra em dois portfólios, small e large, de acordo com o marketcap da empresa. 
+Abaixo podemos ver as dez maiores empresas:
+
+```{r}
+
+largefolio <- base_crua %>% 
+    filter(!is.na(mkt_cap)) %>%
+    filter(mkt_cap >= median(mkt_cap)) %>% 
+    arrange(desc(mkt_cap)) %>% 
+    select(id, nome, ticker, mkt_cap, everything())
+
+head(largefolio, n = 10)
+
+```
+
+Abaixo podemos ver as dez menores empresas:
+
+```{r}
+
+smallfolio <- base_crua %>% 
+  filter(!is.na(mkt_cap)) %>%
+  filter(mkt_cap < median(mkt_cap)) %>% 
+  arrange(mkt_cap) %>% 
+  select(id, nome, ticker, mkt_cap, everything())
+
+head(smallfolio, n = 10)
+
+```
+
+Salvamos as bases que serão utilizadas: 
+
+```{r}
+write.csv(base_crua, file = "portfolio.csv", append = F)
+
+write.csv(smallfolio, file = "smallfolio.csv", append = F)
+
+write.csv(largefolio, file = "largefolio.csv", append = F)
+
+```
+
+
+Definidos os portfólios, podemos iniciar os testes t para médias de retorno, sempre utilizando do trigésimo percentil acima como o "top30" e do septuagésimo percentil para baixo como o "bottom30". 
+
+Primeiros vamos analisar através do ROE como indicador de qualidade:
+
+ROE no Bigfolio:
+```{r}
+# Essas são as 30% com maiores ROE's
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(retorno_total)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(desc(ROE)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROE's
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(retorno_total)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(ROE) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+
+
+# Comparação:
+p_return_ROE_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE,
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+ROE no Smallfolio:
+```{r}
+# Essas são as 30% com maiores ROE's
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(retorno_total)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(desc(ROE)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROE's
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(retorno_total)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(ROE) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ROE_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+ROA no Bigfolio: 
+```{r}
+# Essas são as 30% com maiores ROA's
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROA) %>% 
+  filter(!is.na(ROA), !is.na(retorno_total)) %>%
+  filter(ROA > 0) %>% 
+  arrange(desc(ROA)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROA's
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROA) %>% 
+  filter(!is.na(ROA), !is.na(retorno_total)) %>%
+  filter(ROA > 0) %>%
+  arrange(ROA) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ROA_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+ROA no Smallfolio:
+```{r}
+# Essas são as 30% com maiores ROA's
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROA) %>% 
+  filter(!is.na(ROA), !is.na(retorno_total)) %>%
+  filter(ROA > 0) %>%
+  arrange(desc(ROA)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROA's
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROA) %>% 
+  filter(!is.na(ROA), !is.na(retorno_total)) %>%
+  filter(ROA > 0) %>%
+  arrange(ROA) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ROA_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+
+```
+
+
+ROIC no Bigfolio:
+```{r}
+# Essas são as 30% com maiores ROIC's
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROIC) %>% 
+  filter(!is.na(ROIC), !is.na(retorno_total)) %>%
+  arrange(desc(ROIC)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  #mutate(cap_weight = (mkt_cap/sum(mkt_cap))) %>%
+  #summarise(return = sum(retorno_total * cap_weight)) %>% 
+  #mutate(ret_ponderado = retorno_total * cap_weight) %>%
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROIC's
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROIC) %>% 
+  filter(!is.na(ROIC), !is.na(retorno_total)) %>%
+  arrange(ROIC) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  #mutate(cap_weight = (mkt_cap/sum(mkt_cap))) %>%
+  #summarise(return = sum(retorno_total * cap_weight)) %>% 
+  #mutate(ret_ponderado = retorno_total * cap_weight) %>%
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ROIC_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+ROIC no Smallfoilio:
+
+```{r}
+# Essas são as 30% com maiores ROIC's
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROIC) %>% 
+  filter(!is.na(ROIC), !is.na(retorno_total)) %>%
+  arrange(desc(ROIC)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ROIC's
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ROIC) %>% 
+  filter(!is.na(ROIC), !is.na(retorno_total)) %>%
+  arrange(ROIC) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ROIC_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+Lucro bruto no bigfolio:
+
+```{r}
+# Essas são as 30% com maiores Lucro Bruto
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, lucro_bruto) %>% 
+  filter(!is.na(lucro_bruto), !is.na(retorno_total)) %>%
+  arrange(desc(lucro_bruto)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores Lucro Bruto
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, lucro_bruto) %>% 
+  filter(!is.na(lucro_bruto), !is.na(retorno_total)) %>%
+  arrange(lucro_bruto) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_lucro_bruto_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+
+```
+
+
+Lucro bruto no Smallfolio:
+
+```{r}
+# Essas são as 30% com maiores Lucro Bruto
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, lucro_bruto) %>% 
+  filter(!is.na(lucro_bruto), !is.na(retorno_total)) %>%
+  arrange(desc(lucro_bruto)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores Lucro Bruto
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, lucro_bruto) %>% 
+  filter(!is.na(lucro_bruto), !is.na(retorno_total)) %>%
+  arrange(lucro_bruto) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_lucro_bruto_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+Crescimento de LPA no Bigfolio:
+
+```{r}
+# Essas são as 30% com maiores LPA growth
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, LPA_growth) %>% 
+  filter(!is.na(LPA_growth), !is.na(retorno_total)) %>%
+  arrange(desc(LPA_growth)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores LPA growth
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, LPA_growth) %>% 
+  filter(!is.na(LPA_growth), !is.na(retorno_total)) %>%
+  arrange(LPA_growth) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_LPA_growth_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+Crescimento de LPA no Smallfolio: 
+
+```{r}
+# Essas são as 30% com maiores LPA growth
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, LPA_growth) %>% 
+  filter(!is.na(LPA_growth), !is.na(retorno_total)) %>%
+  arrange(desc(LPA_growth)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores LPA growth
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, LPA_growth) %>% 
+  filter(!is.na(LPA_growth), !is.na(retorno_total)) %>%
+  arrange(LPA_growth) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_LPA_growth_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+Dívida/Cap. próprio no Bigfolio: 
+
+```{r}
+# Essas são as 30% com maiores BS
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, alav_BS) %>% 
+  filter(!is.na(alav_BS), !is.na(retorno_total)) %>%
+  filter(alav_BS > 0) %>% 
+  arrange(desc(alav_BS)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores BS
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, alav_BS) %>% 
+  filter(!is.na(alav_BS), !is.na(retorno_total)) %>%
+  filter(alav_BS > 0) %>%
+  arrange(alav_BS) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_BS_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+Dívida/Cap. próprio no Smallfolio:
+
+```{r}
+# Essas são as 30% com maiores BS
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, alav_BS) %>% 
+  filter(!is.na(alav_BS), !is.na(retorno_total)) %>%
+  filter(alav_BS > 0) %>%
+  arrange(desc(alav_BS)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores BS
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, alav_BS) %>% 
+  filter(!is.na(alav_BS), !is.na(retorno_total)) %>%
+  filter(alav_BS > 0) %>%
+  arrange(alav_BS) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_BS_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+EBIT/Div. Liq. no Bigfolio:
+
+```{r}
+# Essas são as 30% com maiores EBIT_DivLiq
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, EBIT_DivLiq) %>% 
+  filter(!is.na(EBIT_DivLiq), !is.na(retorno_total)) %>%
+  filter(EBIT_DivLiq > 0) %>%
+  arrange(desc(EBIT_DivLiq)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores EBIT_DivLiq
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, EBIT_DivLiq) %>% 
+  filter(!is.na(EBIT_DivLiq), !is.na(retorno_total)) %>%
+  filter(EBIT_DivLiq > 0) %>%
+  arrange(EBIT_DivLiq) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_EBIT_DivLiq_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+EBIT/Div. Liq. no Smallfolio:
+
+```{r}
+# Essas são as 30% com maiores EBIT_DivLiq
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, EBIT_DivLiq) %>% 
+  filter(!is.na(EBIT_DivLiq), !is.na(retorno_total)) %>%
+  filter(EBIT_DivLiq > 0) %>%
+  arrange(desc(EBIT_DivLiq)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores EBIT_DivLiq
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, EBIT_DivLiq) %>% 
+  filter(!is.na(EBIT_DivLiq), !is.na(retorno_total)) %>%
+  filter(EBIT_DivLiq > 0) %>%
+  arrange(EBIT_DivLiq) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>%
+  select(retorno_total)
+
+
+# Comparação:
+p_return_EBIT_DivLiq_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+Crescimento de ativo no Bigfolio:
+
+```{r}
+# Essas são as 30% com maiores ativo_growth
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ativo_growth) %>% 
+  filter(!is.na(ativo_growth), !is.na(retorno_total)) %>%
+  arrange(desc(ativo_growth)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ativo_growth
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ativo_growth) %>% 
+  filter(!is.na(ativo_growth), !is.na(retorno_total)) %>%
+  arrange(ativo_growth) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ativo_growth_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+Crescimento de ativo no Smallfolio:
+
+```{r}
+# Essas são as 30% com maiores ativo_growth
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ativo_growth) %>% 
+  filter(!is.na(ativo_growth), !is.na(retorno_total)) %>%
+  arrange(desc(ativo_growth)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores ativo_growth
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, ativo_growth) %>% 
+  filter(!is.na(ativo_growth), !is.na(retorno_total)) %>%
+  arrange(ativo_growth) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_ativo_growth_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+Provisões no Bigfolio:
+
+```{r}
+# Essas são as 30% com maiores provisoes
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, provisoes) %>% 
+  filter(!is.na(provisoes), !is.na(retorno_total)) %>%
+  filter(provisoes > 0) %>% 
+  arrange(desc(provisoes)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores provisoes
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, provisoes) %>% 
+  filter(!is.na(provisoes), !is.na(retorno_total)) %>%
+  filter(provisoes > 0) %>% 
+  arrange(provisoes) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_provisoes_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+Provisões no Smallfolio:
+
+```{r}
+# Essas são as 30% com maiores provisoes
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, provisoes) %>% 
+  filter(!is.na(provisoes), !is.na(retorno_total)) %>%
+  filter(provisoes > 0) %>% 
+  arrange(desc(provisoes)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(retorno_total)
+
+
+# Essas são as 30% com menores provisoes
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, retorno_total, mkt_cap, provisoes) %>% 
+  filter(!is.na(provisoes), !is.na(retorno_total)) %>%
+  filter(provisoes > 0) %>% 
+  arrange(provisoes) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(retorno_total)
+
+
+# Comparação:
+p_return_provisoes_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+```
+
+
+
+
+Resultados dos testes:
+```{r, echo= FALSE}
+cat("Comparativo de retorno para ROE nas empresas grandes,p-valor:   ", p_return_ROE_big, 
+    "\nComparativo de retorno para ROE nas empresas pequenas, p-valor: ", p_return_ROE_small,
+    "\n\nComparativo de retorno para ROA nas empresas grandes, p-valor:  ", p_return_ROA_big,
+    "\nComparativo de retorno para ROA nas empresas pequenas, p-valor: ", p_return_ROA_small,
+    "\n\nComparativo de retorno para ROIC nas empresas grandes, p-valor: ", p_return_ROIC_big,
+    "\nComparativo de retorno para ROIC nas empresas pequenas, p-valor: ", p_return_ROIC_small,
+    "\n\nComparativo de retorno para Lucro Bruto nas empresas grandes, p-valor: ", p_return_lucro_bruto_big,
+    "\nComparativo de retorno para Lucro Bruto nas empresas pequenas, p-valor: ", p_return_lucro_bruto_small,
+    "\n\nComparativo de retorno para crescimento de LPA nas empresas grandes, p-valor: ", p_return_LPA_growth_big,
+    "\nComparativo de retorno para Crescimento de LPA nas empresas pequenas, p-valor: ", p_return_LPA_growth_small,
+    "\n\nComparativo de retorno para Dívida/Cap. Próprio nas empresas grandes, p-valor: ", p_return_BS_big,
+    "\nComparativo de retorno para Dívida/Cap. Próprio nas empresas pequenas, p-valor: ", p_return_BS_small,
+    "\n\nComparativo de retorno para EBIT/Div. Líquida nas empresas grandes, p-valor: ", p_return_EBIT_DivLiq_big,
+    "\nComparativo de retorno para EBIT/Div. Líquida nas empresas pequenas, p-valor: ", p_return_EBIT_DivLiq_small,
+    "\n\nComparativo de retorno para Crescimento dos ativos nas empresas grandes, p-valor: ", p_return_ativo_growth_big,
+    "\nComparativo de retorno para Crescimento dos ativos nas empresas pequenas, p-valor: ", p_return_ativo_growth_small,
+    "\n\nComparativo de retorno para Provisões nas empresas pequenas, p-valor: ", p_return_provisoes_big,
+    "\nComparativo de retorno para Provisões nas empresas pequenas, p-valor: ", p_return_provisoes_small)
+```
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+Sharpe:
+
+
+
+
+Definidos os portfólios, podemos iniciar os testes t para médias de retorno, sempre utilizando do trigésimo percentil acima como o "top30" e do septuagésimo percentil para baixo como o "bottom30". 
+
+Primeiros vamos analisar através do ROE como indicador de qualidade:
+
+ROE no Bigfolio:
+```{r}
+# Essas são as 30% com maiores ROE's
+top30 <- largefolio %>%       
+  select(id, nome, classe, ticker, sharpe_calc, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(sharpe_calc)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(desc(ROE)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(sharpe_calc)
+
+
+# Essas são as 30% com menores ROE's
+bottom30 <- largefolio %>%
+  select(id, nome, classe, ticker, sharpe_calc, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(sharpe_calc)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(ROE) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(sharpe_calc)
+
+
+
+
+# Comparação:
+p_sharpe_ROE_big <- t.test(return_top30, return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+ROE no Smallfolio:
+```{r}
+# Essas são as 30% com maiores ROE's
+top30 <- smallfolio %>%       
+  select(id, nome, classe, ticker, sharpe_calc, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(sharpe_calc)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(desc(ROE)) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_top30 <- top30 %>% 
+  select(sharpe_calc)
+
+
+# Essas são as 30% com menores ROE's
+bottom30 <- smallfolio %>%
+  select(id, nome, classe, ticker, sharpe_calc, mkt_cap, ROE) %>% 
+  filter(!is.na(ROE), !is.na(sharpe_calc)) %>%
+  filter(ROE > 0 & ROE <= 100) %>% 
+  arrange(ROE) %>%
+  filter(row_number() < (0.3)*max(row_number()))
+
+return_bottom30 <- bottom30 %>% 
+  select(sharpe_calc)
+
+
+# Comparação:
+p_sharpe_ROE_small <- t.test(x = return_top30, y = return_bottom30, alternative = "greater", mu = 0, paired = FALSE, 
+       var.equal = FALSE, conf.level = 0.95)$p.value
+
+```
+
+
+
+
+
+```{r}
+cat("Comparativo de Sharpe para ROE nas empresas grandes,p-valor:   ", p_sharpe_ROE_big, 
+    "\nComparativo de Sharpe para ROE nas empresas pequenas, p-valor: ", p_sharpe_ROE_small)
+```
+
+
+
