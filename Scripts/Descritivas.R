@@ -4,7 +4,7 @@
 library(tidyverse)
 install.packages("table1")
 
-theme_set(theme_light())
+theme_set(theme_bw())
 
 # Working directory and databases:
 setwd("C:/Users/gutao/OneDrive - Insper - Institudo de Ensino e Pesquisa/Documents/Insper/IC/Data/Dataset")
@@ -14,9 +14,23 @@ smallfolio <- read.csv("smallfolio.csv")
 largefolio <- read.csv("largefolio.csv")
 
 
+
+# Uma pequena alteracao:
+smallfolio <- smallfolio %>% 
+    mutate(portfolio = "smallfolio",
+           retorno_an = ((1+retorno_total/100)^(1/10))-1,
+           retorno_an = 100*retorno_an)
+
+
+largefolio <- largefolio %>% 
+    mutate(portfolio = "largefolio",
+           retorno_an = ((1+retorno_total/100)^(1/10))-1,
+           retorno_an = 100*retorno_an)
+
+allfolio <- rbind(smallfolio, largefolio)
+
+
 # Summary statistics table for each database:
-
-
 
 summary_portfolio <- table1::table1(~retorno_total + sharpe_calc + sharpe_economatica + mkt_cap + ROE + ROA + ROIC +  
                lucro_bruto + LPA_growth + alav_BS + EBIT_DivLiq + ativo_growth + 
@@ -36,7 +50,8 @@ summary_largefolio <- table1::table1(~retorno_total + sharpe_calc + sharpe_econo
 (retorno_ROE <- portfolio %>%
     ggplot(aes(x = ROE, y = retorno_total)) +
     geom_point(aes(colour = size)) +
-    geom_smooth(aes(colour = size), method = "lm", se = F))
+    geom_smooth(aes(colour = size), method = "lm", se = F) +
+    labs(colour = NULL))
              
 
 (retorno_ROA <- portfolio %>%
@@ -159,3 +174,22 @@ summary_largefolio <- table1::table1(~retorno_total + sharpe_calc + sharpe_econo
     geom_point(aes(colour = size)) +
     geom_smooth(aes(colour = size), method = "lm", se = F))
 
+
+# Boxplot para retorno nos dois portfolios:
+
+ggplot() +
+    geom_boxplot(data = allfolio, aes(y = retorno_total, x = portfolio)) +
+    labs(y = NULL, x = NULL, title = "Boxplot dos retornos totais")
+
+bla <- boxplot.stats(smallfolio$retorno_total)
+bla$out
+
+
+# Boxplot para sharpe nos dois portfolios:
+
+ggplot() +
+    geom_boxplot(data = allfolio, aes(y = sharpe_economatica, x = portfolio)) +
+    labs(y = NULL, x = NULL, title = "Boxplot do índice de Sharpe")
+
+bla <- boxplot(largefolio$sharpe_economatica)
+bla$out
