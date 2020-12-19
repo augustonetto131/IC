@@ -9,25 +9,10 @@ theme_set(theme_bw())
 # Working directory and databases:
 setwd("C:/Users/gutao/OneDrive - Insper - Institudo de Ensino e Pesquisa/Documents/Insper/IC/Data/Dataset")
 
-portfolio <- read.csv("portfolio.csv")
+allfolio <- read.csv("allfolio.csv")
 smallfolio <- read.csv("smallfolio.csv")
 largefolio <- read.csv("largefolio.csv")
 
-
-
-# Uma pequena alteracao:
-smallfolio <- smallfolio %>% 
-    mutate(portfolio = "smallfolio",
-           retorno_an = ((1+retorno_total/100)^(1/10))-1,
-           retorno_an = 100*retorno_an)
-
-
-largefolio <- largefolio %>% 
-    mutate(portfolio = "largefolio",
-           retorno_an = ((1+retorno_total/100)^(1/10))-1,
-           retorno_an = 100*retorno_an)
-
-allfolio <- rbind(smallfolio, largefolio)
 
 
 # Summary statistics table for each database:

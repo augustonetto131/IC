@@ -98,11 +98,34 @@ head(smallfolio, n = 10)
 Salvamos as bases que serão utilizadas: 
 
 ```{r}
+
+
+# Antes uma alteração:
+
+
+# Uma pequena alteracao:
+smallfolio <- smallfolio %>% 
+    mutate(portfolio = "smallfolio",
+           retorno_an = ((1+retorno_total/100)^(1/10))-1,
+           retorno_an = 100*retorno_an)
+
+
+largefolio <- largefolio %>% 
+    mutate(portfolio = "largefolio",
+           retorno_an = ((1+retorno_total/100)^(1/10))-1,
+           retorno_an = 100*retorno_an)
+
+allfolio <- rbind(smallfolio, largefolio)
+
+# Agora escrevendo:
+
 write.csv(base_crua, file = "portfolio.csv", append = F)
 
 write.csv(smallfolio, file = "smallfolio.csv", append = F)
 
 write.csv(largefolio, file = "largefolio.csv", append = F)
+
+write.csv(allfolio, file = "allfolio.csv", append = F)
 
 ```
 
