@@ -52,7 +52,6 @@ p_return_ROE_big <- t.test(return_top30, return_bottom30, alternative = "greater
                            var.equal = FALSE, conf.level = 0.95)$p.value
 
 
-
 ###### ROE no Smallfolio:
   
 # Essas são as 30% com maiores ROE's

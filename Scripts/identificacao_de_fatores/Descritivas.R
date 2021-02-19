@@ -13,7 +13,7 @@ allfolio <- read.csv("allfolio.csv")
 smallfolio <- read.csv("smallfolio.csv")
 largefolio <- read.csv("largefolio.csv")
 
-
+median(allfolio$mkt_cap)
 
 # Summary statistics table for each database:
 
